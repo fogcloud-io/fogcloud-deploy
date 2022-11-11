@@ -1,0 +1,931 @@
+## emqx
+---
+# emqx-pvc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: emqx-headless
+  name: emqx-headless-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+status: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: mqtt-broker
+  name: mqtt-broker
+  namespace: fogcloud
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  ports:
+    - name: "mqtt-tcp"
+      port: 1883
+      targetPort: 1883
+      nodePort: 21883
+    - name: "mqtt-tls"
+      port: 8883
+      targetPort: 8883
+      nodePort: 28883
+    - name: "http-api"
+      port: 8081
+      targetPort: 8081
+      nodePort: 28081
+    - name: "mqtt-ws"
+      port: 8083
+      targetPort: 8083
+      nodePort: 28083
+    - name: "mqtt-wss"
+      port: 8084
+      targetPort: 8084
+      nodePort: 28084
+    - name: "admin"
+      port: 18083
+      targetPort: 18083
+      nodePort: 18085
+
+  selector:
+    app: mqtt-broker
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: fogcloud
+  name: emqx
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: fogcloud
+  name: emqx
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
+      - watch
+      - list
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: fogcloud
+  name: emqx
+subjects:
+  - kind: ServiceAccount
+    name: emqx
+    namespace: fogcloud
+roleRef:
+  kind: Role
+  name: emqx
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mqtt-broker
+  namespace: fogcloud
+  labels:
+    app: mqtt-broker
+spec:
+  serviceName: mqtt-broker
+  updateStrategy:
+    type: RollingUpdate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt-broker
+  template:
+    metadata:
+      labels:
+        app: mqtt-broker
+    spec:
+      serviceAccountName: emqx
+      containers:
+        - name: mqtt-broker
+          image: emqx/emqx:4.2.8
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: mqttssl
+              containerPort: 8883
+            - name: mgmt
+              containerPort: 8081
+            - name: ws
+              containerPort: 8083
+            - name: wss
+              containerPort: 8084
+            - name: dashboard
+              containerPort: 18083
+          volumeMounts:
+            - name: emqx-headless-data
+              mountPath: /emq
+            - name: emq-claim
+              mountPath: /opt/emqx/etc/plugins/emqx_web_hook.conf
+              subPath: emqx_web_hook.conf
+            - name: emq-claim
+              mountPath: /opt/emqx/etc/plugins/emqx_auth_http.conf
+              subPath: emqx_auth_http.conf
+            - name: emq-claim
+              mountPath: /opt/emqx/data/loaded_plugins
+              subPath: loaded_plugins
+          env:
+            - name: EMQX_LISTENER__TCP__EXTERNAL__ACCEPTORS
+              value: "64"
+            - name: EMQX_LISTENER__TCP__EXTERNAL__MAX_CONNECTIONS
+              value: "1024000"
+            - name: EMQX_NAME
+              value: mqtt-broker
+            - name: EMQX_CLUSTER__K8S__ADDRESS__TYPE
+              value: hostname
+            - name: EMQX_CLUSTER__K8S__SUFFIX
+              value: svc.cluster.local
+            - name: EMQX_CLUSTER__K8S__SERVICE_NAME # 和service.name一致
+              value: mqtt-broker
+            - name: EMQX_CLUSTER__DISCOVERY
+              value: k8s
+            - name: EMQX_CLUSTER__K8S__APP_NAME # 和EMQX_NAME一致
+              value: mqtt-broker
+            - name: EMQX_CLUSTER__K8S__NAMESPACE
+              value: fogcloud-dev
+            - name: EMQX_CLUSTER__K8S__APISERVER
+              value: "https://localhost:6443"
+      volumes:
+        - name: emqx-headless-data
+          persistentVolumeClaim:
+            claimName: emqx-headless-pvc
+        - name: emq-claim
+          configMap:
+            name: fog-config
+            items:
+              - key: emqx_web_hook.conf
+                path: emqx_web_hook.conf
+              - key: emqx_auth_http.conf
+                path: emqx_auth_http.conf
+              - key: loaded_plugins
+                path: loaded_plugins
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: etcd-data
+  name: etcd-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+status: {}
+
+---
+# etcd-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: etcd1
+  name: etcd1
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "2379"
+      port: 2379
+      targetPort: 2379
+  selector:
+    app: etcd1
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: etcd1
+  name: etcd1
+  namespace: fogcloud
+spec:
+  containers:
+    - image: bitnami/etcd:3.5.1
+      name: etcd1
+      ports:
+        - containerPort: 2379
+      volumeMounts:
+        - mountPath: /bitnami/etcd/data
+          name: etcd1-data
+      env:
+        - name: ALLOW_NONE_AUTHENTICATION
+          value: "yes"
+        - name: ETCD_ADVERTISE_CLIENT_URLS
+          value: "http://etcd1:2379"
+  restartPolicy: Always
+  volumes:
+    - name: etcd1-data
+      persistentVolumeClaim:
+        claimName: etcd-pvc
+status: {}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: minio-data
+  name: minio-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+status: {}
+
+---
+# minio-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: minio
+  name: minio
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "9000"
+      port: 9000
+      targetPort: 9000
+    - name: "9001"
+      port: 9001
+      targetPort: 9001
+  selector:
+    app: minio
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: fogcloud
+spec:
+  containers:
+    - name: minio
+      args:
+        - server
+        - --console-address
+        - :9001
+        - /data
+      env:
+        - name: MINIO_ACCESS_KEY
+          value: "1234567890"
+        - name: MINIO_REGION_NAME
+          value: cn-south-1
+        - name: MINIO_ROOT_PASSWORD
+          value: fogcloud
+        - name: MINIO_ROOT_USER
+          value: minio
+        - name: MINIO_SECRET_KEY
+          value: abcdefghi
+      image: minio/minio
+      ports:
+        - containerPort: 9000
+        - containerPort: 9001
+      resources: {}
+      volumeMounts:
+        - mountPath: /data
+          name: minio-data
+  restartPolicy: Always
+  volumes:
+    - name: minio-data
+      persistentVolumeClaim:
+        claimName: minio-pvc
+status: {}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: mongo-data
+  name: mongo-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+status: {}
+
+---
+# mongo-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: mongo
+  name: mongo
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "27017"
+      port: 27017
+      targetPort: 27017
+  selector:
+    app: mongo
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: mongo
+  name: mongo
+  namespace: fogcloud
+spec:
+  containers:
+    - image: mongo:4.4-rc-focal
+      name: mongo
+      ports:
+        - containerPort: 27017
+      resources: {}
+      volumeMounts:
+        - mountPath: /data/db
+          name: mongo-data
+  restartPolicy: Always
+  volumes:
+    - name: mongo-data
+      persistentVolumeClaim:
+        claimName: mongo-pvc
+status: {}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: postgres-data
+  name: postgres-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+status: {}
+
+---
+# postgres-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: postgres
+  name: postgres
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "5432"
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+  namespace: fogcloud
+spec:
+  containers:
+    - env:
+        - name: POSTGRES_DB
+          value: fogcloud
+        - name: POSTGRES_PASSWORD
+          value: fogcloud
+        - name: POSTGRES_USER
+          value: postgres
+      image: postgres:13
+      name: postgres
+      ports:
+        - containerPort: 5432
+      resources: {}
+      volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-data
+  restartPolicy: Always
+  volumes:
+    - name: postgres-data
+      persistentVolumeClaim:
+        claimName: postgres-pvc
+status: {}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    pvc: redis-data
+  name: redis-pvc
+  namespace: fogcloud
+spec:
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+status: {}
+
+---
+# redis-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: redis
+  name: redis
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "6379"
+      port: 6379
+      targetPort: 6379
+  selector:
+    app: redis
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: redis
+  name: redis
+  namespace: fogcloud
+spec:
+  containers:
+    - image: redis:6.2
+      name: redis
+      ports:
+        - containerPort: 6379
+      resources: {}
+      volumeMounts:
+        - mountPath: /data
+          name: redis-data
+  restartPolicy: Always
+  volumes:
+    - name: redis-data
+      persistentVolumeClaim:
+        claimName: redis-pvc
+status: {}
+
+---
+# rabbitmq-service
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.24.0 (4a2a0458)
+  creationTimestamp: null
+  labels:
+    srv: rabbitmq
+  name: rabbitmq
+  namespace: fogcloud
+spec:
+  type: NodePort
+  ports:
+    - name: "amqp"
+      port: 5672
+      targetPort: 5672
+      nodePort: 5672
+    - name: "admin"
+      port: 15672
+      targetPort: 15672
+    - name: "amqp-tls"
+      port: 5671
+      targetPort: 5671
+      nodePort: 5671
+  selector:
+    app: rabbitmq
+status:
+  loadBalancer: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: rabbitmq
+  name: rabbitmq
+  namespace: fogcloud
+spec:
+  containers:
+    - env:
+        - name: RABBITMQ_CONFIG_FILE
+          value: /etc/rabbitmq/rabbitmq.conf
+
+      image: rabbitmq:3-management
+      name: rabbitmq
+      ports:
+        - containerPort: 15672
+        - containerPort: 5672
+      resources: {}
+      volumeMounts:
+        - mountPath: /etc/rabbitmq/rabbitmq.conf
+          subPath: rabbitmq.conf
+          name: rabbitmq-claim
+        - mountPath: /etc/rabbitmq/enabled_plugins
+          subPath: enabled_plugins
+          name: rabbitmq-claim
+  restartPolicy: Always
+  volumes:
+    - name: rabbitmq-claim
+      configMap:
+        name: fog-config
+        defaultMode: 0755
+        items:
+          - key: rabbitmq.conf
+            path: rabbitmq.conf
+          - key: enabled_plugins
+            path: enabled_plugins
+status: {}
+
+---
+# fogcloud-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: fogcloud
+  name: fogcloud
+  namespace: fogcloud
+spec:
+  type: NodePort
+  ports:
+    - name: "http"
+      port: 4000
+      targetPort: 4000
+      nodePort: 4000
+    - name: "http-debug"
+      port: 4001
+      targetPort: 15000
+  selector:
+    app: fogcloud
+status:
+  loadBalancer: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    dep: fogcloud
+  name: fogcloud
+  namespace: fogcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fogcloud
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0    
+  template:
+    metadata:
+      annotations:
+      labels:
+        app: fogcloud
+    spec:
+      containers:
+        - args:
+            - fogcloud
+            - -c
+            - /etc/fogcloud/fogcloud.yaml
+            - -e
+            - test
+          image: ghcr.io/fogcloud-io/fogcloud:latest
+          imagePullPolicy: Always
+          name: fogcloud
+          ports:
+            - containerPort: 4000
+            - containerPort: 15000
+          resources: {}
+          volumeMounts:
+            - mountPath: /etc/fogcloud/fogcloud.yaml
+              subPath: fogcloud.yaml
+              name: fogcloud-claim
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: fogcloud-claim
+          configMap:
+            name: fog-config
+            items:
+              - key: fogcloud.yaml
+                path: fogcloud.yaml
+status: {}
+
+# nginx-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: nginx
+  name: nginx
+  namespace: fogcloud
+spec:
+  type: NodePort
+  ports:
+    - name: "http"
+      port: 80
+      targetPort: 80
+      nodePort: 8000
+    - name: "https"
+      port: 443
+      targetPort: 443
+  selector:
+    app: nginx
+status:
+  loadBalancer: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: nginx
+  name: nginx
+  namespace: fogcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - image: nginx:1.21
+          name: nginx
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          resources: {}
+          volumeMounts:
+            - mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              name: nginx-claim
+            - mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              name: nginx-claim
+      restartPolicy: Always
+      volumes:
+        - name: nginx-claim
+          configMap:
+            name: fog-config
+            defaultMode: 0755
+            items:
+              - key: default.conf
+                path: default.conf
+              - key: nginx.conf
+                path: nginx.conf
+status: {}
+
+---
+# faasproxy-service
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    srv: faasbuilder
+  name: faasbuilder
+  namespace: fogcloud
+spec:
+  ports:
+    - name: "api"
+      port: 8090
+      targetPort: 8090
+  selector:
+    app: faasbuilder
+status:
+  loadBalancer: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  labels:
+    dep: faasbuilder
+  name: faasbuilder
+  namespace: fogcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faasbuilder
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+      labels:
+        app: faasbuilder
+    spec:
+      containers:
+        - image: ghcr.io/fogcloud-io/faas-builder:latest
+          args:
+            - -c
+            - /etc/faasbuilder/faasbuilder.yaml
+            - -e
+            - development
+          env:
+            - name: KUBECONFIG
+              value: /etc/faasbuilder/kubeconfig
+          imagePullPolicy: Always
+          name: faasbuilder
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 8090
+          resources: {}
+          volumeMounts:
+            - mountPath: /etc/faasbuilder/faasbuilder.yaml
+              subPath: faasbuilder.yaml
+              name: fogcloud-claim
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: fogcloud-claim
+          configMap:
+            name: fog-config
+            items:
+              - key: faasbuilder.yaml
+                path: faasbuilder.yaml
+status: {}
+
+---
+# fogcron-scheduler
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    dep: fogcron-scheduler
+  name: fogcron-scheduler
+  namespace: fogcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fogcron-scheduler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: fogcron-scheduler
+    spec:
+      containers:
+        - args:
+            - fogcron
+            - schedule
+            - -c
+            - /etc/fogcron/config.yaml
+            - -e
+            - development
+          image: ghcr.io/fogcloud-io/fogcron-scheduler:latest
+          imagePullPolicy: Always
+          name: fogcron-scheduler
+          resources: {}
+          volumeMounts:
+            - mountPath: /etc/fogcron/config.yaml
+              subPath: config.yaml
+              name: fogcron-scheduler-claim
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: fogcron-scheduler-claim
+          configMap:
+            name: fog-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+status: {}
+
+---
+# fogcloud-web-service
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    srv: fogcloud-web
+  name: fogcloud-web
+  namespace: fogcloud
+spec:
+  type: NodePort
+  ports:
+    - name: "http"
+      port: 4002
+      targetPort: 8000
+      nodePort: 8888
+  selector:
+    app: fogcloud-web
+status:
+  loadBalancer: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    dep: fogcloud-web
+  name: fogcloud-web
+  namespace: fogcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fogcloud-web
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: fogcloud-web
+    spec:
+      containers:
+        - image: ghcr.io/fogcloud-io/fogcloud-web:latest
+          imagePullPolicy: Always
+          name: fogcloud-web
+          env:
+            - name: API_BASE_URL
+              value: http://localhost:8000/api/v1
+            - name: MQTT_BASE_URL
+              value: ws://localhost:8083/mqtt
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - mountPath: /etc/nginx/conf.d
+              name: nginx-claim
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: nginx-claim
+          configMap:
+            name: fog-config
+            items:
+              - key: default_web.conf
+                path: default.conf
+status: {}

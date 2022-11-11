@@ -1,0 +1,16 @@
+kubectl create --namespace=fogcloud configmap fog-config \
+--from-file=fogcloud.yaml=./configs/fogcloud.example.yaml \
+--from-file=./configs/emq/emqx_auth_http.conf \
+--from-file=./configs/emq/emqx_web_hook.conf \
+--from-file=./configs/emq/loaded_plugins \
+--from-file=./configs/nginx/default.conf \
+--from-file=./configs/nginx/default_web.conf \
+--from-file=./configs/nginx/nginx.conf \
+--from-file=./configs/rabbitmq/enabled_plugins \
+--from-file=./configs/rabbitmq/rabbitmq.conf \
+--from-file=./configs/fogcron/config.yaml \
+--from-file=./configs/hmq/http.json \
+--from-file=./configs/hmq/rabbitmq.json \
+--from-file=./configs/hmq/hmq.config \
+--from-file=faasbuilder.yaml=./configs/faasbuilder/config.yaml \
+--from-file=./configs/faasbuilder/kubeconfig
