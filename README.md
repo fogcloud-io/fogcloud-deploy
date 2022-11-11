@@ -40,7 +40,7 @@ fogcloud默认使用的端口：
 ### 1.2 安装
 ```bash
 git clone https://github.com/fogcloud-io/fogcloud-deploy.git
-cd docker
+cd fogcloud-deploy/docker
 docker compose up -d
 ```
 
@@ -58,7 +58,7 @@ docker compose down
 ### 2.2 安装
 ```bash
 git clone https://github.com/fogcloud-io/fogcloud-deploy.git
-cd kubernetes
+cd fogcloud-deploy/kubernetes
 kubectl create ns fogcloud
 ./create-configmap.sh
 kubectl apply -f fogcloud-all.yaml
@@ -109,7 +109,7 @@ helm uninstall ${RELEASE_NAME}
 ```
 注意：默认启用了helm的资源保留，卸载时不会释放persistent volume资源；
 
-### 3.5 配置说明：
+### 3.5 配置说明
 
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
