@@ -29,6 +29,8 @@ fogcloud默认使用的端口：
 | 5672 | amqp服务 | 用于服务端消息订阅（未加密） |
 | 5671 | amqp-tls服务 | 用于服务端消息订阅 |
 
+* 推荐使用helm部署fogcloud
+
 ## 1 使用docker-compose部署
 
 ### 1.1 安装前准备
@@ -90,18 +92,20 @@ helm pull fogcloud-charts/fogcloud-charts --untar
 2. 编辑myvalues.yaml文件，参考配置说明
 3. 安装fogcloud-charts
 ```console
-kubectl create namespace {NAMESPACE_NAME}
-helm install -f myvalues.yaml {RELEASE_NAME} --set namespace={NAMESPACE_NAME} ./fogcloud-charts
+export NAMESPACE_NAME=fogcloud
+export RELEASE_NAME=fogcloud
+kubectl create namespace ${NAMESPACE_NAME}
+helm install -f myvalues.yaml ${RELEASE_NAME} --set namespace=${NAMESPACE_NAME} ./fogcloud-charts
 ```
 4. 升级fogcloud-charts
 ```console
-helm upgrade -f myvalues.yaml {RELEASE_NAME} ./fogcloud-charts
+helm upgrade -f myvalues.yaml ${RELEASE_NAME} ./fogcloud-charts
 ```
 
 ### 3.4 卸载chart
 
 ```console
-helm uninstall {RELEASE_NAME}
+helm uninstall ${RELEASE_NAME}
 ```
 注意：默认启用了helm的资源保留，卸载时不会释放persistent volume资源；
 
