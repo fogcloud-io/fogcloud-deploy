@@ -60,19 +60,20 @@ fogcloud默认使用的端口：
 - [安装 docker](https://docs.docker.com/engine/install/) 20+
 
 ### 1.2 安装
-```bash
-git clone https://github.com/fogcloud-io/fogcloud-deploy.git
-cd fogcloud-deploy/docker
-docker compose up -d
-```
-
-`docker-compose.yaml`配置说明：
+先修改`fogcloud-deploy/docker/docker-compose.yaml`文件中的配置项，参考以下配置说明：
 
 | 配置项 | 说明 | 默认值 |
 | --- | --- | --- |
 | `services.fogcloud_web.environment.API_BASE_URL` | 后端服务url，请将`host`修改为主机域名或公网ip | `http://localhost:8001/api/v1` | 
 | `services.fogcloud_web.environment.MQTT_BASE_URL` | mqtt服务url，将`host`修改为主机域名或公网ip | `ws://localhost:8083/mqtt` |
 
+安装命令：
+
+```bash
+git clone https://github.com/fogcloud-io/fogcloud-deploy.git
+cd fogcloud-deploy/docker
+docker compose up -d
+```
 
 ### 1.3 卸载
 ```bash
