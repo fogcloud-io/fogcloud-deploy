@@ -19,7 +19,7 @@ volumes:
 
 services:
   fogcloud:
-    image: registry.cn-shanghai.aliyuncs.com/fogcloud/fogcloud:beta
+    image: ghcr.io/fogcloud-io/fogcloud:latest
     container_name: fogcloud
     restart: unless-stopped
     ports:
@@ -41,13 +41,37 @@ services:
       ["fogcloud", "-c", "/etc/fogcloud/fogcloud.yaml", "-e", "development"]
 
   fogcloud_web:
-    image: registry.cn-shanghai.aliyuncs.com/fogcloud/fogcloud_web:beta
+    image: ghcr.io/fogcloud-io/fogcloud-web:latest
     environment:
       API_BASE_URL: http://localhost:4000/api/v1
       MQTT_BASE_URL: ws://localhost:8083/mqtt
     container_name: fog-web
     ports:
       - 8000:8000
+
+  faasbuilder:
+    image: ghcr.io/fogcloud-io/faas-builder:latest
+    depends_on:
+      - postgres 
+    volumes:
+      - ./faasbuilder/faasbuilder.yaml:/etc/faasbuilder/faasbuilder.yaml
+    container_name: faasbuilder
+    networks:
+      - fogcloud_net    
+    command:
+      ["faasbuilder", "-c", "/etc/faasbuilder/faasbuilder.yaml", "-e", "development"]
+
+  fogcron_scheduler:
+    image: ghcr.io/fogcloud-io/fogcron-scheduler:latest
+    networks:
+      - fogcloud_net    
+    depends_on:
+      - etcd 
+    volumes:
+      - ./fogcron/fogcron.yaml:/etc/fogcron/fogcron.yaml
+    container_name: fogcron-scheduler
+    command:
+      ["fogcron", "schedule", "-c", "/etc/fogcron/fogcron.yaml", "-e", "development"]      
 
   redis:
     image: redis:6.2

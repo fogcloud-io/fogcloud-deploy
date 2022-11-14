@@ -1,6 +1,6 @@
 # fogcloud部署
 
-#### foglcoud相关服务镜像
+#### 容器镜像
 
 ```
 ghcr.io/fogcloud-io/fogcloud:latest
@@ -8,6 +8,27 @@ ghcr.io/fogcloud-io/fogcloud-web:latest
 ghcr.io/fogcloud-io/faas-builder:latest
 ghcr.io/fogcloud-io/fogcron-scheduler:latest
 ```
+
+#### 服务组成
+
+| 应用 | 说明 |
+| --- | --- |
+| `fogcloud` | 后端服务：fogcloud核心接口 |
+| `fogcloud-web` | 前端服务：后台管理页面 |
+| `faas-builder` | 云函数编译服务 |
+| `fogcron-scheduler` | 定时器服务 |  
+
+* 依赖的第三方应用
+
+| 应用 | 说明 | 默认 |
+| --- | --- | --- | 
+| mqtt-broker | mqtt服务，支持`emqx`，`vernemq`, `hmq`等开源软件 | `emqx` |
+| amqp服务 | 提供消息订阅功能，支持`rabbitmq` | `rabbitmq` |  
+| 关系数据库 | 数据存储，支持`postgres`，`mysql`等开源软件 | `postgres` | 
+| 对象数据库 | 用于设备状态存储，支持`mongodb` | `mongodb` |
+| kv数据库 | 数据缓存 | `redis` | 
+| etcd | 用于数据存储和节点同步 | `etcd` |
+| 对象存储 | 用于存储静态文件和设备固件，支持minio | `minio` | 
 
 #### 配置要求
 * 一台或多台linux-amd64主机，建议三台或以上；
@@ -28,6 +49,7 @@ fogcloud默认使用的端口：
 | 8084 | mqtt-websocket-ssl服务 | 用于前端虚拟设备安全连接 |
 | 5672 | amqp服务 | 用于服务端消息订阅（未加密） |
 | 5671 | amqp-tls服务 | 用于服务端消息订阅 |
+
 
 * 推荐使用helm部署fogcloud
 
@@ -179,6 +201,19 @@ helm uninstall ${RELEASE_NAME}
 | **minio** | | |
 | `minio.enabled` | 是否使用k8s创建minio（生产环境不建议使用容器部署） | `true` |
 
+## 附录
+
+### 配置文件说明
+
+#### 1. fogcloud后端应用配置
+| 参数 | 描述 | 默认值 |
+| --- | --- | --- |
 
 
+#### 2. fogcron配置
+| 参数 | 描述 | 默认值 |
+| --- | --- | --- |
 
+#### 3. faas-builder配置
+| 参数 | 描述 | 默认值 |
+| --- | --- | --- |

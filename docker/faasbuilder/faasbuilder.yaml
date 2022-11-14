@@ -1,0 +1,36 @@
+defaults: &defaults
+  PORT: 8090
+  REPO_URL:
+  REPO_API_URL: 
+  REPO_PROJECT:
+  FISSION_API_URL: http://localhost:8081
+  ACCESS_KEY:
+  ACCESS_SECRET:
+  TEMPLATE_PATH:
+
+  REDIS_HOST: 127.0.0.1
+  REDIS_PORT: 6379
+  REDIS_PASSWORD:
+  REDIS_DB: 3
+
+  POSTGRES_HOST: 127.0.0.1
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: fogcloud
+  POSTGRES_DBNAME: fogcloud
+  POSTGRES_SSLMODE: disable
+
+development: &development
+  <<: *defaults
+  FISSION_API_URL: http://controller.fission.svc.cluster.local
+  REPO_PROJECT:
+  TEMPLATE_PATH: /etc/faasbuilder/
+
+  REDIS_HOST: fog-redis
+  POSTGRES_HOST: fog-postgres
+
+test:
+  <<: *development
+
+production:
+  <<: *development
