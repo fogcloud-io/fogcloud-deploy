@@ -66,6 +66,14 @@ cd fogcloud-deploy/docker
 docker compose up -d
 ```
 
+`docker-compose.yaml`配置说明：
+
+| 配置项 | 说明 | 默认值 |
+| --- | --- | --- |
+| `services.fogcloud_web.environment.API_BASE_URL` | 后端服务url，请将`host`修改为主机域名或公网ip | `http://localhost:8001/api/v1` | 
+| `services.fogcloud_web.environment.MQTT_BASE_URL` | mqtt服务url，将`host`修改为主机域名或公网ip | `ws://localhost:8083/mqtt` |
+
+
 ### 1.3 卸载
 ```bash
 docker compose down
