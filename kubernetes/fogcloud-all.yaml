@@ -32,27 +32,27 @@ spec:
     - name: "mqtt-tcp"
       port: 1883
       targetPort: 1883
-      nodePort: 21883
+      nodePort: 1883
     - name: "mqtt-tls"
       port: 8883
       targetPort: 8883
-      nodePort: 28883
+      nodePort: 8883
     - name: "http-api"
       port: 8081
       targetPort: 8081
-      nodePort: 28081
+      nodePort: 8081
     - name: "mqtt-ws"
       port: 8083
       targetPort: 8083
-      nodePort: 28083
+      nodePort: 8083
     - name: "mqtt-wss"
       port: 8084
       targetPort: 8084
-      nodePort: 28084
+      nodePort: 8084
     - name: "admin"
       port: 18083
       targetPort: 18083
-      nodePort: 18085
+      nodePort: 18083
 
   selector:
     app: mqtt-broker
@@ -206,8 +206,8 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    srv: etcd1
-  name: etcd1
+    srv: etcd
+  name: etcd
   namespace: fogcloud
 spec:
   ports:
@@ -215,7 +215,7 @@ spec:
       port: 2379
       targetPort: 2379
   selector:
-    app: etcd1
+    app: etcd
 status:
   loadBalancer: {}
 
@@ -224,26 +224,26 @@ apiVersion: v1
 kind: Pod
 metadata:
   labels:
-    app: etcd1
-  name: etcd1
+    app: etcd
+  name: etcd
   namespace: fogcloud
 spec:
   containers:
     - image: bitnami/etcd:3.5.1
-      name: etcd1
+      name: etcd
       ports:
         - containerPort: 2379
       volumeMounts:
         - mountPath: /bitnami/etcd/data
-          name: etcd1-data
+          name: etcd-data
       env:
         - name: ALLOW_NONE_AUTHENTICATION
           value: "yes"
         - name: ETCD_ADVERTISE_CLIENT_URLS
-          value: "http://etcd1:2379"
+          value: "http://etcd:2379"
   restartPolicy: Always
   volumes:
-    - name: etcd1-data
+    - name: etcd-data
       persistentVolumeClaim:
         claimName: etcd-pvc
 status: {}
@@ -601,12 +601,11 @@ metadata:
   name: fogcloud
   namespace: fogcloud
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
     - name: "http"
       port: 4000
       targetPort: 4000
-      nodePort: 4000
     - name: "http-debug"
       port: 4001
       targetPort: 15000
@@ -621,7 +620,7 @@ kind: Deployment
 metadata:
   labels:
     dep: fogcloud
-  name: fogcloud
+  name: fogcloud-core
   namespace: fogcloud
 spec:
   replicas: 1
@@ -632,7 +631,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 50%
-      maxUnavailable: 0    
+      maxUnavailable: 0
   template:
     metadata:
       annotations:
@@ -645,10 +644,10 @@ spec:
             - -c
             - /etc/fogcloud/fogcloud.yaml
             - -e
-            - test
+            - development
           image: ghcr.io/fogcloud-io/fogcloud:latest
           imagePullPolicy: Always
-          name: fogcloud
+          name: fogcloud-core
           ports:
             - containerPort: 4000
             - containerPort: 15000
@@ -658,8 +657,6 @@ spec:
               subPath: fogcloud.yaml
               name: fogcloud-claim
       restartPolicy: Always
-      imagePullSecrets:
-        - name: regcred
       volumes:
         - name: fogcloud-claim
           configMap:
@@ -669,6 +666,7 @@ spec:
                 path: fogcloud.yaml
 status: {}
 
+---
 # nginx-service
 apiVersion: v1
 kind: Service
@@ -683,7 +681,7 @@ spec:
     - name: "http"
       port: 80
       targetPort: 80
-      nodePort: 8000
+      nodePort: 8001
     - name: "https"
       port: 443
       targetPort: 443
@@ -706,7 +704,10 @@ spec:
     matchLabels:
       app: nginx
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -774,7 +775,10 @@ spec:
     matchLabels:
       app: faasbuilder
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
   template:
     metadata:
       annotations:
@@ -803,8 +807,6 @@ spec:
               subPath: faasbuilder.yaml
               name: fogcloud-claim
       restartPolicy: Always
-      imagePullSecrets:
-        - name: regcred
       volumes:
         - name: fogcloud-claim
           configMap:
@@ -829,7 +831,10 @@ spec:
     matchLabels:
       app: fogcron-scheduler
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -878,7 +883,7 @@ spec:
     - name: "http"
       port: 4002
       targetPort: 8000
-      nodePort: 8888
+      nodePort: 8000
   selector:
     app: fogcloud-web
 status:
@@ -898,7 +903,10 @@ spec:
     matchLabels:
       app: fogcloud-web
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -910,7 +918,7 @@ spec:
           name: fogcloud-web
           env:
             - name: API_BASE_URL
-              value: http://localhost:8000/api/v1
+              value: http://localhost:8001/api/v1
             - name: MQTT_BASE_URL
               value: ws://localhost:8083/mqtt
           ports:

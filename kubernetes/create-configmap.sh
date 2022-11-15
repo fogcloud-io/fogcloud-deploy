@@ -9,8 +9,5 @@ kubectl create --namespace=fogcloud configmap fog-config \
 --from-file=./configs/rabbitmq/enabled_plugins \
 --from-file=./configs/rabbitmq/rabbitmq.conf \
 --from-file=./configs/fogcron/config.yaml \
---from-file=./configs/hmq/http.json \
---from-file=./configs/hmq/rabbitmq.json \
---from-file=./configs/hmq/hmq.config \
 --from-file=faasbuilder.yaml=./configs/faasbuilder/config.yaml \
 --from-file=./configs/faasbuilder/kubeconfig
