@@ -87,6 +87,13 @@ docker compose down
 - [安装并设置 kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) 1.19+
 
 ### 2.2 安装
+先修改`fogcloud-deploy/kubernetes/fogcloud-all.yaml`文件中fogcloud-web的配置项，参考以下配置说明：
+
+| 配置项 | 说明 | 默认值 |
+| --- | --- | --- |
+| `spec.containers[].env[].value` (name='API_BASE_URL') | 后端服务url，请将`host`修改为主机域名或公网ip | `http://localhost:8001/api/v1` | 
+| `spec.containers[].env[].value` (name='MQTT_BASE_URL') | mqtt服务url，将`host`修改为主机域名或公网ip | `ws://localhost:8083/mqtt` |
+
 ```bash
 git clone https://github.com/fogcloud-io/fogcloud-deploy.git
 cd fogcloud-deploy/kubernetes
@@ -98,6 +105,7 @@ kubectl apply -f fogcloud-all.yaml
 ### 2.3 卸载
 ```bash
 kubectl delete -f fogcloud-all.yaml
+kubectl delete configmap/fog-config -n fogcloud
 ```
 
 ## 3 使用helm部署
